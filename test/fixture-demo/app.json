@@ -1,0 +1,10 @@
+{
+  "pages": ["pages/index/index", "pages/detail/detail"],
+  "window": { "defaultTitle": "冒烟测试Demo" },
+  "tabBar": {
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页", "iconPath": "assets/tab.png", "selectedIconPath": "assets/tab-on.png" },
+      { "pagePath": "pages/detail/detail", "text": "详情" }
+    ]
+  }
+}

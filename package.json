@@ -1,0 +1,28 @@
+{
+  "name": "alipay-miniprogram-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Alipay Mini Program DevTools: build validation, preview, upload, log collection & analysis, page/functional/boundary testing",
+  "type": "module",
+  "main": "index.mjs",
+  "bin": {
+    "alipay-miniprogram-mcp": "index.mjs"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "smoke": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "alipay",
+    "miniprogram",
+    "minidev",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "minidev": "^2.2.5",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.5"
+  }
+}
