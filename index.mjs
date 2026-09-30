@@ -17,7 +17,7 @@ import { LogStore, SessionRegistry } from './src/state.mjs';
 import { buildTools } from './src/tools.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 // ---------- 目录与环境 ----------
 const dataDir = process.env.MP_DATA_DIR

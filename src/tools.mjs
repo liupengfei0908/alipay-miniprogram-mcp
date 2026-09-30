@@ -107,31 +107,48 @@ export function buildTools(ctx) {
     });
 
   def('mp_login', '工具授权（扫码登录）',
-    '发起 minidev 工具授权，二维码 URL 会通过日志通知推送，成功或超时后返回结果',
-    {
-      type: 'object',
-      properties: { timeoutMs: { type: 'number', description: '等待扫码的超时毫秒数，默认 180000' } },
-    },
-    async (args) => {
-      const timeoutMs = args.timeoutMs ?? 180_000;
-      let qrUrl = null;
-      const off = worker.onEvent((name, data, id) => {
-        if (name === 'login-qrcode') {
-          qrUrl = data.qrCodeUrl;
-          notify('info', `请用支付宝 App 扫码授权，二维码链接: ${data.qrCodeUrl}`);
-        }
-        if (name === 'login-scan') notify('info', '已扫码，请在手机上确认授权…');
-      });
-      try {
-        await worker.call('auth.login', { timeoutMs });
-        const qrFile = qrUrl ? await saveQrImage(qrUrl, 'login') : null;
-        return ok({ ok: true, summary: '授权成功 ✓', qrCodeUrl: qrUrl, qrImageFile: qrFile });
-      } catch (e) {
-        const qrFile = qrUrl ? await saveQrImage(qrUrl, 'login') : null;
-        return fail(e.message, { qrCodeUrl: qrUrl, qrImageFile: qrFile, hint: '若超时可重新调用 mp_login 获取新二维码' });
-      } finally {
-        off();
+    '发起 minidev 工具授权，立即返回授权二维码（图片文件 + 链接）；非阻塞，扫码确认后用 mp_login_status 查询结果',
+    { type: 'object', properties: {} },
+    async () => {
+      const r = await worker.call('auth.login.start', {});
+      let qrFile = null;
+      if (r.qrCodeUrl) {
+        qrFile = await saveQrImage(r.qrCodeUrl, 'login');
+        notify('info', `请用支付宝 App 扫码授权，二维码链接: ${r.qrCodeUrl}`);
       }
+      return ok({
+        ok: true,
+        summary: r.reused
+          ? '已有进行中的授权会话，请继续用原二维码扫码（或等它结束后重新发起）'
+          : '授权二维码已生成，请用支付宝扫码并在手机上确认',
+        status: r.status,
+        qrCodeUrl: r.qrCodeUrl,
+        qrImageFile: qrFile,
+        next: '扫码确认后调用 mp_login_status 查询授权结果',
+      });
+    });
+
+  def('mp_login_status', '授权结果查询',
+    '查询扫码授权的当前状态：waiting=等待扫码 / scanned=已扫码待确认 / success=授权成功 / failed=失败 / idle=未发起',
+    { type: 'object', properties: {} },
+    async () => {
+      const r = await worker.call('auth.login.status', {});
+      const hints = {
+        idle: '尚未发起授权，先调用 mp_login',
+        starting: '二维码生成中…',
+        waiting: '等待扫码中…',
+        scanned: '已扫码，请在手机上点确认',
+        success: '授权成功 ✓',
+        failed: `授权失败: ${r.error ?? '未知原因'}`,
+      };
+      return ok({
+        ok: r.status === 'success',
+        summary: hints[r.status] ?? `状态: ${r.status}`,
+        status: r.status,
+        qrCodeUrl: r.qrCodeUrl,
+        error: r.error,
+        next: r.status === 'success' ? '可以开始使用全部工具了' : (r.status === 'failed' ? '重新调用 mp_login 获取新二维码' : '稍后再次调用 mp_login_status'),
+      });
     });
 
   // ============ 构建与静态验证 ============

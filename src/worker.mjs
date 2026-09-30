@@ -23,6 +23,9 @@ try { ns.setLogLevelVerboseEnabled?.(false); } catch {}
 /** 活动会话: devServer / remoteDebug / loginTask / webSimulator */
 const sessions = new Map();
 
+/** 授权登录会话（非阻塞两段式） */
+let loginSession = null;
+
 function send(obj) {
   process.stdout.write(JSON.stringify(obj) + '\n');
 }
@@ -92,27 +95,52 @@ const ops = {
     return info;
   },
 
-  /** 工具授权（扫码登录） */
-  async 'auth.login'(args, ctx) {
-    const timeoutMs = args.timeoutMs ?? 180_000;
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) { settled = true; reject(new Error('登录超时：请在时限内用支付宝 App 扫码确认')); }
-      }, timeoutMs);
-      const done = (fn, val) => {
-        if (settled) return;
-        settled = true; clearTimeout(timer); fn(val);
-      };
-      minidev.login({}, (loginTask) => {
-        loginTask.on('qrcode-generated', (qrCodeUrl) => emitEvent(ctx.id, 'login-qrcode', { qrCodeUrl }));
-        loginTask.on('scan', () => emitEvent(ctx.id, 'login-scan', {}));
-        loginTask.on('success', () => {
-          emitEvent(ctx.id, 'login-success', {});
-          done(resolve, { success: true });
-        });
-      }).catch((e) => done(reject, e));
+  /**
+   * 工具授权（扫码登录）— 非阻塞两段式：
+   * auth.login.start 立即返回二维码；auth.login.status 查询结果。
+   * MCP 客户端默认 60s 请求超时，阻塞式等待扫码必然超时。
+   */
+  async 'auth.login.start'(args, ctx) {
+    if (loginSession && (loginSession.status === 'waiting' || loginSession.status === 'scanned' || loginSession.status === 'starting')) {
+      return { reused: true, status: loginSession.status, qrCodeUrl: loginSession.qrUrl ?? null };
+    }
+    loginSession = { status: 'starting', qrUrl: null, startedAt: Date.now(), error: null };
+    minidev.login({}, (loginTask) => {
+      loginTask.on('qrcode-generated', (qrCodeUrl) => {
+        loginSession.status = 'waiting';
+        loginSession.qrUrl = qrCodeUrl;
+        emitEvent(ctx.id, 'login-qrcode', { qrCodeUrl });
+      });
+      loginTask.on('scan', () => {
+        loginSession.status = 'scanned';
+        emitEvent(ctx.id, 'login-scan', {});
+      });
+      loginTask.on('success', () => {
+        loginSession.status = 'success';
+        emitEvent(ctx.id, 'login-success', {});
+      });
+    }).catch((e) => {
+      if (loginSession.status !== 'success') {
+        loginSession.status = 'failed';
+        loginSession.error = toError(e).message;
+      }
     });
+    // 等待二维码生成（最多 10s），生成立即返回
+    const t0 = Date.now();
+    while (loginSession.status === 'starting' && Date.now() - t0 < 10_000) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return { reused: false, status: loginSession.status, qrCodeUrl: loginSession.qrUrl };
+  },
+
+  async 'auth.login.status'() {
+    if (!loginSession) return { status: 'idle' };
+    return {
+      status: loginSession.status,
+      qrCodeUrl: loginSession.qrUrl,
+      error: loginSession.error,
+      startedAt: loginSession.startedAt,
+    };
   },
 
   /** 本地构建 */

@@ -1,6 +1,6 @@
 {
   "name": "alipay-miniprogram-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Alipay Mini Program DevTools: build validation, preview, upload, log collection & analysis, page/functional/boundary testing",
   "type": "module",
   "main": "index.mjs",

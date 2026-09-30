@@ -51,8 +51,12 @@ worker 独立进程的意义：minidev 的控制台输出/进度条无法污染 
 ## 首次使用
 
 1. 调用 `mp_env_check` — 自检 Node/minidev/IDE/授权状态
-2. 调用 `mp_login` — 生成授权二维码（图片存到 `data/qr/`，URL 通过日志通知推送），用支付宝 App 扫码
-3. 之后即可使用全部工具
+2. 调用 `mp_login` — 立即返回授权二维码（图片存到 `data/qr/`），用支付宝 App 扫码
+3. 调用 `mp_login_status` — 确认 `success` 后即可使用全部工具
+
+> 长耗时工具（构建/预览/上传）可能超过 MCP 客户端默认 60s 超时：
+> DeepSeek Harness 接入建议配 `toolCallTimeoutMs: 300000`；其他客户端如有超时设置项请调到 5 分钟。
+> 登录已设计为非阻塞两段式，不受该超时影响。
 
 > 首次构建如果提示缺构建资源，运行 `npx minidev setup-build` 初始化构建环境。
 
@@ -62,7 +66,8 @@ worker 独立进程的意义：minidev 的控制台输出/进度条无法污染 
 | 工具 | 说明 |
 |---|---|
 | `mp_env_check` | 环境自检：Node/minidev 版本、IDE 路径、授权状态、修复建议 |
-| `mp_login` | 工具授权：生成扫码二维码，等待确认 |
+| `mp_login` | 工具授权：**非阻塞**生成扫码二维码（图片 + 链接），立即返回 |
+| `mp_login_status` | 查询授权状态：waiting / scanned / success / failed / idle |
 
 ### 构建与静态验证
 | 工具 | 说明 |
